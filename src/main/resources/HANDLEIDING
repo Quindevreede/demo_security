@@ -1,0 +1,409 @@
+HANDLEIDING met security(authentication/authorization)
+
+Eerst iets belangrijks de hierarchie binnen een
+SPRINGBOOT Applicatie:
+
+Je hebt bij Spring Boot verschillende lagen;
+
+Controller Classes > Presentation Layer (authentication en JSON translation) > Data Transfer Object > Public
+
+Service Classes > Business Layer (business logic, validation en authorization) > Data Transfer Object/Domain Model > Public/Private
+
+Repository Classes > Persistance layer (Storage Logic) > Domain Model > Private
+
+DataBase (Actual database)
+
+Dus
+
+Controller (het gedeelte wat tegen de front end aanzit, eindpunten)
+Service (het brein achter je applicatie haalt alles op en geeft t aan controller)
+Repository (haalt de data op voor de service)
+Database (hierin zit je data)
+
+--
+
+De Presentation Layer (controller) praat ALLEEN MAAR MET de Business Layer
+De Business Layer (service) praat ALLEEN MAAR MET de Persistance Layer
+De Persistance Layer (repository) praat ALLEEN MAAR MET de Database
+
+Je kunt dus niet vanuit je Presentation Layer in 1 keer bij je Persistance-
+of Database Layer komen, eerst moet je dan je Business Layer aanroepen.
+
+De Presentation Layer (controller) moet je heel simpel houden,
+de Business Layer (service) is de kern en stuurt alles aan,
+de Persistance Layer (repository) kan data opvragen uit de Database.
+
+Dus voor bedrijf vraagt client via de Presentation Layer de factuur aan.
+De Business Layer maakt de factuur op met de data die de Persistance Layer
+uit de Database haalt.
+
+---
+
+NU GAAN WE ONZE APPLICATIE MAKEN
+
+Stap 1:
+-------
+We gaan beginnen om een basis voor de security op te zetten.
+
+-> Begin met File>New>Project>
+
+-> Kies in New Project menu voor Spring Initializr en vul je eigen gegevens in.
+
+-> Voor de Developer Tools vink de volgende vakjes aan:
+
+   * Bij Web -- Spring Web
+   * Bij Security -- Spring Security
+   * Bij SQL -- Spring Data JPA
+   * Bij SQL -- PostgreSQL Driver
+
+-- We zetten nu even een BASIS SECURITY op die we later gaan veranderen --
+
+-> We maken een PACKAGE aan voor "controller" in onze hoofdpackage (bijv nl.novi.demo_security)
+
+-> Maak in die package een CLASS en noem die bijv DemoController
+
+  We vullen hier het volgende in:
+
+---
+package nl.novi.demo_security.controller;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class DemoController {
+
+    @GetMapping("/secure")
+    public ResponseEntity<Object> demoSecure() {
+        return ResponseEntity.ok("Security demo - ADMIN only");
+    }
+
+    @GetMapping("/users_only")
+    public ResponseEntity<Object> demoPublic() {
+        return ResponseEntity.ok("Security demo - USER and ADMIN access");
+    }
+
+    @GetMapping("/all")
+    public ResponseEntity<Object> demoEverybody() {
+        return ResponseEntity.ok("Landingspagina for everybody");
+    }
+
+}
+---
+
+Je kunt deze controller ook basecontroller noemen, wat je wilt.
+Wat belangrijk is is dat hierin je drie ENDPOINTS heb geinstantieerd en
+je maakt de melding (dmv: return ResponseEntity.ok) bij
+
+/secure -- dat de endpoint 'secure' is dus beschermd.
+*.. geeft deze boodschap als je erin bent: Security demo - ADMIN only
+/users_only -- dat de endpoint 'voor gebruikers' van de app(users en admin met password) is.
+*.. geeft deze boodschap als je erin bent: Security demo - USER and ADMIN access
+/all -- je hoeft hier niet in te loggen, iedereen kan bij deze ENDPOINT
+*.. geeft deze boodschap als je erin bent:Landingspagina for everybody
+
+Bij de CLASS waarin je de app runt (bijv DemoSecurityApplication)
+vullen we de volgende code in:
+
+---
+package nl.novi.demo_security;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class DemoSecurityApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(DemoSecurityApplication.class, args);
+    }
+
+}
+---
+
+Hierover valt niet enorm veel te melden behalve dat je hiermee je Applicatie start.
+
+-> Nu ga je in de MAP "resources" de "application.properties" invullen zodat je applicatie
+ook daadwerkelijk gerunt kan worden:
+
+---
+# webserver
+server.port=666
+#spring.security.user.name = quin
+#spring.security.user.password = p4ssw0rd
+# datasource PostgreSQl
+spring.datasource.platform=postgres
+spring.datasource.url=jdbc:postgresql://localhost:5432/springboot
+spring.datasource.username=springboot
+spring.datasource.password=springboot
+spring.datasource.driver-class-name=org.postgresql.Driver
+# jpa
+spring.jpa.database=postgresql
+spring.jpa.show-sql=true
+# generate schema dll to create tables
+spring.jpa.generate-ddl=true
+spring.jpa.hibernate.ddl-auto=create
+spring.datasource.initialization-mode=always
+# database initialization with data.sql after hibernate
+spring.jpa.defer-datasource-initialization=true
+# hibernate
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
+# Fix Postgres JPA Error (Method org.postgresql.jdbc.PgConnection.createClob() is not yet implemented).
+spring.jpa.properties.hibernate.jdbc.lob.non_contextual_creation=true
+---
+
+Dit gaan we even ontleden:
+
+01-
+# webserver
+server.port=666
+
+Dit is de serverport die je gaat gebruiken. Het kan gebeuren dat IntelliJ een
+fout geeft omdat de serverport al gebruikt wordt en dan kun je m hier veranderen.
+
+02-
+spring.security.user.name = quin
+spring.security.user.password = p4ssw0rd
+
+Dit is je username en je password die je gebruikt we gaan dit later in de handleiding
+allemaal veranderen omdat nu iedereen deze gegevens kan zien.
+
+03-
+# datasource PostgreSQl
+spring.datasource.platform=postgres
+spring.datasource.url=jdbc:postgresql://localhost:5432/springboot
+spring.datasource.username=springboot
+spring.datasource.password=springboot
+spring.datasource.driver-class-name=org.postgresql.Driver
+
+Dit is je SpringBoot,
+je geeft aan dat je PostgreSQL gebruikt,
+je geeft de localhost van PGAdmin en de map waarin het moet
+je geeft je username en password van die map in PGAdmin
+
+04-
+# jpa
+spring.jpa.database=postgresql
+spring.jpa.show-sql=true
+# generate schema dll to create tables
+spring.jpa.generate-ddl=true
+spring.jpa.hibernate.ddl-auto=create
+spring.datasource.initialization-mode=always
+# database initialization with data.sql after hibernate
+spring.jpa.defer-datasource-initialization=true
+# hibernate
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
+# Fix Postgres JPA Error (Method org.postgresql.jdbc.PgConnection.createClob() is not yet implemented).
+spring.jpa.properties.hibernate.jdbc.lob.non_contextual_creation=true
+
+Deze code heeft allemaal te maken met ORM dat is de vertaling van jouw code binnen dit programma en POSTGRESQL
+HIBERNATE is het framework hiervoor en dit stuk code zorgt er dus mede voor dat het programma dat we aan
+het schrijven zijn kan communiceren met de DATABASE.
+
+Dit was STAP 1 waarin we een nieuw project hebben aangemaakt en een voorlopige security.
+Je kunt nu in IntelliJ in je DemoSecurityApplication op PLAY drukken en dan krijg je een
+wachtwoord mee in de terminal. Deze kun je in POSTMAN gebruiken bij AUTH en dan BASIC AUTHENTICATION
+en dan kun je de username en wachtwoord gebruiken die je bij applictation.properties hebt ingevuld
+spring.security.user.name = quin
+spring.security.user.password = p4ssw0rd
+
+Dus bij eindpunten:
+/
+/secure
+/users_only
+/all
+
+moet je nu bij POSTMAN GET POST DELETE PUT bij AUTHORIZATION -basic auth- kiezen en dan:
+username : quin
+password : p4ssw0rd
+(niet hoofdlettergevoelig)
+
+Dit is een BASE64 manier en is makkelijk te achterhalen voor hackers, dus we gaan extra beveiligen.
+-----------
+
+Stap 2:
+-------
+We gaan een beveiligings level verder en daarvoor moeten we inbreken op de default configuratie van SpringBoot
+
+-> We maken een nieuwe package in onze hoofdpackage aan en die noemen we "security"
+-> Daarin maken we een Class aan en die noemen we WebSecurityConfiguration
+
+-> De WebSecurityConfiguration vullen we als volgt:
+
+---
+package ml.novi.demo_security.security;
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.config.http.SessionCreationPolicy;
+
+import static org.springframework.http.HttpMethod.GET;
+
+@Configuration
+@EnableWebSecurity
+public class WebSecurityConfiguration extends WebSecurityConfigurerAdapter {
+
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+
+        auth.inMemoryAuthentication()
+                .withUser("user").password("{noop}password").roles("USER")
+                .and()
+                .withUser("admin").password("{noop}password").roles("USER", "ADMIN");
+
+    }
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+
+        http
+                //HTTP Basic authentication
+                .httpBasic()
+                .and()
+                .authorizeRequests()
+                .antMatchers("/secure").hasRole("ADMIN")
+                .antMatchers("/users_only").hasRole("USER")
+                .antMatchers(GET, "/persons/**").hasRole("USER")
+                .antMatchers("/persons/**").hasRole("ADMIN")
+                .antMatchers("/all").permitAll()
+                .and()
+                .csrf().disable()
+                .formLogin().disable()
+                .sessionManagement()
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS);
+
+    }
+
+
+}
+---
+
+Weer even uitleg over deze code:
+
+01-
+@Configuration
+@EnableWebSecurity
+public class WebSecurityConfiguration extends WebSecurityConfigurerAdapter {
+--
+Dit is een Class binnen je Class en hierdoor staat SpringBoot toe dat je
+inbreekt op je WebSecurity, waardoor we de gewenste aanpassingen kunnen maken.
+
+02-
+ @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+
+        auth.inMemoryAuthentication()
+                .withUser("user").password("{noop}password").roles("USER")
+                .and()
+                .withUser("admin").password("{noop}password").roles("USER", "ADMIN");
+--
+DEZE CODE GAAT OVER AUTHENTICATION!
+
+username : quin
+password : p4ssw0rd
+Doen het nu ook niet meer.
+
+03-
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+
+        http
+                //HTTP Basic authentication
+                .httpBasic()
+                .and()
+                .authorizeRequests()
+                .antMatchers("/secure").hasRole("ADMIN")
+                .antMatchers("/users_only").hasRole("USER")
+                .antMatchers(GET, "/persons/**").hasRole("USER")
+                .antMatchers("/persons/**").hasRole("ADMIN")
+                .antMatchers("/all").permitAll()
+                .and()
+                .csrf().disable()
+                .formLogin().disable()
+             // .cors() Corsconfigurer<HttpSecurity>
+             //  .and() HttpSecurity
+                .sessionManagement()
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS);
+
+    }
+--
+DEZE CODE GAAT OVER AUTHORISATION
+Dit laatste stuk code bepaald de rollen van de users(all/user/admin)
+en waar ze toegang tot hebben. We gebruiken voor onze applicatie deze METHODE.
+Je geeft aan dat je HTTP basic wilt gebruiken.
+
+Als je hieronder
+.anyRequest().permitAll() zou gebruiken stel je alles open voor iedereen.
+In plaats daarvan doen we met .authorizeRequests() dus grenzen leggen waar
+bepaalde gebruikers toegang tot hebben. Bij antMatchers("/all").permitAll()
+staat dus nog steeds permitAll() en is dus ook voor iedereen toegankelijk zonder password.
+MAAR bij .antMatchers("/secure").hasRole("ADMIN") zeg je dus:
+antmatchers(endpoints) die eindigen op secure mag alleen ADMIN met password bij
+
+                .antMatchers(GET, "/persons/**").hasRole("USER")
+                .antMatchers("/persons/**").hasRole("ADMIN")
+
+Met bovenstaande code mag een USER -GET- gebruiken in endpoint /persons en verder(/persons/jobs ect)
+,Maar alle andere handelingen(bijv POST, DELETE of PUT mag alleen door ADMIN
+
+In het laatste stukje staan .csrf().disable() en .formlogin().disable()
+Hier hebben we namelijk niets aan in onze RESTFUL webservice (werkt daarin niet)
+.csrf heeft te maken met mogelijkheid tot hacken met meerdere paginas in je browser en
+.formlogin is een inlogmenu die niet te gebruiken zijn in RESTFUL Webservice
+Je hebt ook nog:
+ .cors() Corsconfigurer<HttpSecurity>
+ .and() HttpSecurity
+Deze code zorgt ervoor dat je vanuit de ene website naar de andere website wat
+kan doen maar daar gaan we later mee aan de slag en enablen...
+
+door            .sessionManagement()
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS);
+kun je met SESSIONS werken wat we niet willen dus staan OFF(STATELESS)
+
+We gaan verderop verder met password ENCODING die je password encrypted naar de BACk-End stuurt.
+Ook gaan we met JWT TOKENS aan de slag, die ervoor zorgen dat je niet elke keer BASIC AUTHENTICATION
+hoeft mee te geven. Een tijdelijke token is dat.
+
+Ook gaan we met de
+                 auth.inMemoryAuthentication()
+                .withUser("user").password("{noop}password").roles("USER")
+                .and()
+                .withUser("admin").password("{noop}password").roles("USER", "ADMIN");
+
+stappen maken zodat we een tabel kunnen maken, waarin we users kunnen bijhouden/aanmaken enz.
+
+Tot zover Stap 2, waarin we ROLES voor de gebruikers(users/admin) hebben toegekend met hun toegangs bereik.
+-----------
+
+Stap 3:
+-------
+
+We gaan stappen maken zodat we een tabel kunnen maken, waarin we users kunnen bijhouden/aanmaken enz.
+
+-> Maak vanuit de hoofd package een nieuwe package en noem deze "model"
+-> Maak hierin CLass: User
+-> Maak hierin Class: Authority
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

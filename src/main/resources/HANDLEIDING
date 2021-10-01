@@ -615,6 +615,11 @@ die ze hebben in de Applicatie.
 
 Nu gaan we de p4ssw0rd ENCRYPTEN want dit is te makkelijk te achterhalen zo.
 
+Ga naar https://bcrypt-generator.com/ en vul daar het password dat je wilt,
+in ons geval p4ssw0rd. Je krijgt nu:
+      $2a$12$PvV8RgVmrTv0rAyGdPwhVulgA/aQJcKbm7fLZeQ7mE7P1w2xgpY0W
+Je kunt ook de rounds ophogen om de ecryption nog gecompliceerder te maken.
+
 -> Vul bij security/WebSecurityConfiguration het volgende in:
 ---
 package nl.novi.demo_security.security;
@@ -731,7 +736,8 @@ nog complexer beveiligd worden door middel van UserDetailsService maar dat doen 
 Daarna komt dus onze nieuwe beter beveiligde code met JDBC die in de Database kijkt (DataSource)
 en daaruit Users en Authorities TABLES raadpleegd.
 
-Met de @Bean PasswordEncoder Encrypt ie t dus. Hij haalt de gegevens uit je DATABASE met DataSource:
+Met de @Bean PasswordEncoder Encrypt ie t dus. Deze METHOD wordt gebruikt in UserController
+om nieuwe POST en PUT passwords meteen te encrypten.
 
  auth.jdbcAuthentication().dataSource(dataSource)
                 .usersByUsernameQuery("SELECT username, password, enabled FROM users WHERE username=?")

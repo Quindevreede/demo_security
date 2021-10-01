@@ -1,4 +1,4 @@
-package ml.novi.demo_security.controller;
+package nl.novi.demo_security.controller;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;

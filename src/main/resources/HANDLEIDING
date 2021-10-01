@@ -389,6 +389,561 @@ We gaan stappen maken zodat we een tabel kunnen maken, waarin we users kunnen bi
 -> Maak hierin CLass: User
 -> Maak hierin Class: Authority
 
+-> Bij model/User stop je het volgende in deze Class:
+---
+package ml.novi.demo_security.model;
+
+import javax.persistence.*;
+import java.util.HashSet;
+import java.util.Set;
+
+@Entity
+@Table(name = "users")
+public class User {
+
+    @Id
+    @Column(nullable = false, unique = true)
+    private String username;
+
+    @Column(nullable = false, length = 255)
+    private String password;
+
+    @Column(nullable = false)
+    private boolean enabled;
+
+    @OneToMany(
+            targetEntity = Authority.class,
+            mappedBy = "username",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
+            fetch = FetchType.EAGER)
+    private Set<Authority> authorities = new HashSet<>();
+
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public Set<Authority> getAuthorities() {
+        return authorities;
+    }
+
+    public void setAuthorities(Set<Authority> authorities) {
+        this.authorities = authorities;
+    }
+
+    public void addAuthority(Authority authority) {
+        this.authorities.add(authority);
+    }
+
+    public void removeAuthority(Authority authority) {
+        this.authorities.remove(authority);
+    }
+
+}
+---
+We gaan dit weer ontleden:
+01-
+@Entity
+@Table(name = "users")
+public class User {
+
+    @Id
+    @Column(nullable = false, unique = true)
+    private String username;
+
+    @Column(nullable = false, length = 255)
+    private String password;
+
+    @Column(nullable = false)
+    private boolean enabled;
+
+    @OneToMany(
+            targetEntity = Authority.class,
+            mappedBy = "username",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
+            fetch = FetchType.EAGER)
+    private Set<Authority> authorities = new HashSet<>();
+
+Je maakt hier een Table aan (met de naam hernoemd naar 'users')
+met een username, password, en TRUE (dat ie enabled dus aan moet staan)
+Deze 3 @Columns zijn de basis voor een user. 'Nullable is false' betekend
+dat ze altijd ingevuld moeten zijn.
+
+02-
+De @OneToMany is belangrijk, want hiermee geef je aan dat een gebruiker meerdere
+authorities kan hebben (bijvoorbeeld admin kan bij /users_only en /secure)
+
+03-
+Je voegt hierna nog de GETTERS EN SETTERS in.
+
+04-
+Je hebt ook nog twee METHODS erin gezet die van pas kunnen komen:
+
+    public void addAuthority(Authority authority) {
+        this.authorities.add(authority);
+    }
+
+    public void removeAuthority(Authority authority) {
+        this.authorities.remove(authority);
+    }
+
+Deze methods kunnen een user een authority geven of juist een authority verwijderen.
+(Sjaak mag nu naast /users_only, ook bij /secure. OF Frida mocht bij /secure maar
+dat nemen we haar af.
+
+LET OP POSTGRESQL STAAT NIET TOE DAT ER EEN TABLE USER BESTAAT hernoem m naar:
+@Table(name = "users")
+
+Vervolgens vullen we model/Authority in met het volgende:
+---
+package nl.novi.demo_security.model;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.Id;
+import javax.persistence.Table;
+import java.io.Serializable;
+
+@Entity
+@Table(name = "authorities")
+public class Authority implements Serializable {
+
+    @Id
+    @Column(nullable = false)
+    private String username;
+
+    @Id
+    @Column(nullable = false)
+    private String authority;
+
+    public Authority() {
+    }
+
+    public Authority(String username, String authority) {
+        this.username = username;
+        this.authority = authority;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public String getAuthority() {
+        return authority;
+    }
+
+    public void setAuthority(String authority) {
+        this.authority = authority;
+    }
+
+}
+
+Korte uitleg:
+
+@Entity
+@Table(name = "authorities")
+public class Authority implements Serializable {
+
+    @Id
+    @Column(nullable = false)
+    private String username;
+
+    @Id
+    @Column(nullable = false)
+    private String authority;
+
+Dit is belangrijk want hij IMPLEMENTS SERIALIZABLE
+en heeft dus twee @ID('s) voor de AUTHORITY moeten deze
+dus ook altijd bij elkaar omdat ze dan UNIQUE zijn.
+Dus bij username Quin moet ik ook ADMIN hebben
+Daarnaast mag ik dus ook Quin de USER hebben want die is
+ook UNIQUE. Ik mag echter geen meerdere Quin Users of ADmins
+hebben dus bij het kiezen van een naam en wachtwoord wordt gecheckt
+of het niet al bestaat.
+
+Verder beetje hetzelfde als bij model/User gebeurt hier ook.
+    @Id
+    @Column(nullable = false)
+    private String authority;
+Is voor het bepalen van de ROLE die de user uit model/User krijgt.
+Verder GETTERS EN SETTERS.
+
+-> We gaan nu een data.spl bestand aanmaken in resources map(waar ook
+application properties staan) om de Users aan te maken.
+
+-> Vul resources/data.sql met het volgende:
+---
+INSERT INTO users (username, password, enabled)
+VALUES ('user', 'p4ssw0rd', TRUE),
+       ('admin', 'p4ssw0rd', TRUE);
+
+INSERT INTO authorities (username, authority)
+VALUES ('user', 'ROLE_USER'),
+       ('admin', 'ROLE_USER'),
+       ('admin', 'ROLE_ADMIN');
+---
+
+Hier staan twee aangemaakte users 'user' (had ook 'henk' mogen zijn)
+en 'admin' (had ook 'cobie' mogen zijn) Met daaronder de ROLE (toegang)
+die ze hebben in de Applicatie.
+
+Nu gaan we de p4ssw0rd ENCRYPTEN want dit is te makkelijk te achterhalen zo.
+
+-> Vul bij security/WebSecurityConfiguration het volgende in:
+---
+package nl.novi.demo_security.security;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
+import javax.sql.DataSource;
+
+import static org.springframework.http.HttpMethod.GET;
+
+@Configuration
+@EnableWebSecurity
+@EnableGlobalMethodSecurity(prePostEnabled = true)
+public class WebSecurityConfiguration extends WebSecurityConfigurerAdapter {
+
+//was voorheen:
+//             auth.inMemoryAuthentication()
+//            .withUser("user").password("{noop}password").roles("USER")
+//            .and()
+//            .withUser("admin").password("{noop}password").roles("USER", "ADMIN");
+
+    private DataSource dataSource;
+
+    @Autowired
+    WebSecurityConfiguration(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+    @Autowired
+    public void configureGlobal(AuthenticationManagerBuilder auth) throws Exception {
+
+        auth.jdbcAuthentication().dataSource(dataSource)
+                .usersByUsernameQuery("SELECT username, password, enabled FROM users WHERE username=?")
+                .authoritiesByUsernameQuery("SELECT username, authority FROM authorities AS a WHERE username=?");
+
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+
+        http
+                //HTTP Basic authentication
+                .httpBasic()
+                .and()
+                .authorizeRequests()
+                .antMatchers("/secure").hasRole("ADMIN")
+                .antMatchers("/users_only").hasRole("USER")
+                .antMatchers("/users/**").hasRole("ADMIN")
+                .antMatchers("/all").permitAll()
+                .and()
+                .csrf().disable()
+                .formLogin().disable()
+                .sessionManagement()
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS);
+
+    }
+
+
+}
+---
+UItleg over code:
+01-
+//was voorheen:
+//             auth.inMemoryAuthentication()
+//            .withUser("user").password("{noop}password").roles("USER")
+//            .and()
+//            .withUser("admin").password("{noop}password").roles("USER", "ADMIN");
+
+    private DataSource dataSource;
+
+    @Autowired
+    WebSecurityConfiguration(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+    @Autowired
+    public void configureGlobal(AuthenticationManagerBuilder auth) throws Exception {
+
+        auth.jdbcAuthentication().dataSource(dataSource)
+                .usersByUsernameQuery("SELECT username, password, enabled FROM users WHERE username=?")
+                .authoritiesByUsernameQuery("SELECT username, authority FROM authorities AS a WHERE username=?");
+
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+Als eerste (Je hebt verschillende websecurity, waar we mee begonnen;
+        auth.inMemoryAuthentication()
+        .withUser("user").password("{noop}password").roles("USER")
+        .and()
+        .withUser("admin").password("{noop}password").roles("USER", "ADMIN");
+is de laagste beveiliging, we gaan m op jdbcAuthentication zetten, maar het kan
+nog complexer beveiligd worden door middel van UserDetailsService maar dat doen we niet.
+
+Daarna komt dus onze nieuwe beter beveiligde code met JDBC die in de Database kijkt (DataSource)
+en daaruit Users en Authorities TABLES raadpleegd.
+
+Met de @Bean PasswordEncoder Encrypt ie t dus. Hij haalt de gegevens uit je DATABASE met DataSource:
+
+ auth.jdbcAuthentication().dataSource(dataSource)
+                .usersByUsernameQuery("SELECT username, password, enabled FROM users WHERE username=?")
+                .authoritiesByUsernameQuery("SELECT username, authority FROM authorities AS a WHERE username=?");
+
+Dit is de uitgebreide versie met de twee laatste zinnen code die de naam van de user opzoekt, deze zijn niet
+noodzakelijk,  --auth.jdbcAuthentication().dataSource(dataSource)-- moet er wel in.
+
+Dit was stap 3, waarin we een extra laag op onze beveiliging hebben gezet, we gaan dit later nog een beetje
+uitbreiden, maar eerst gaan we in stap 4 de rest van de applicatie opzetten.
+
+Stap 4:
+-------
+-> Je maakt weer in je hoofdpackage een nieuwe package die je repository noemt.
+-> Je maakt in deze package een nieuwe Class en die noem je "UserRepository".
+-> Je vult het volgende in:
+---
+package nl.novi.demo_security.repository;
+
+import nl.novi.demo_security.model.User;
+import org.springframework.data.repository.CrudRepository;
+
+public interface UserRepository extends CrudRepository<User, String> {
+
+}
+---
+-> We maken in de hoofdpackage ook een package die we "service" noemen.
+-> In de service package maken we een Class aan die we UserService noemen.
+-> Deze vullen we hiermee:
+---
+package nl.novi.demo_security.service;
+
+import nl.novi.demo_security.exception.RecordNotFoundException;
+import nl.novi.demo_security.model.Authority;
+import nl.novi.demo_security.model.User;
+import nl.novi.demo_security.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import java.util.Collection;
+import java.util.Optional;
+import java.util.Set;
+
+@Service
+public class UserService {
+
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    @Autowired
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+    }
+
+    public Iterable<User> getUsers() {
+        return userRepository.findAll();
+    }
+
+    public Optional<User> getUser(String username) {
+        return userRepository.findById(username);
+    }
+
+    public boolean userExists(String username) {
+        return userRepository.existsById(username);
+    }
+
+    public String createUser(User user) {
+        String password = user.getPassword();
+        String encrypted = passwordEncoder.encode(password);
+        user.setPassword(encrypted);
+        User newUser = userRepository.save(user);
+        return newUser.getUsername();
+    }
+
+    public void deleteUser(String username) {
+        userRepository.deleteById(username);
+    }
+
+    public void updateUser(String username, User newUser) {
+        if (!userRepository.existsById(username)) throw new UsernameNotFoundException(username);
+        User user = userRepository.findById(username).get();
+        user.setPassword(passwordEncoder.encode(newUser.getPassword()));
+        userRepository.save(user);
+    }
+
+    public Set<Authority> getAuthorities(String username) {
+        if (!userRepository.existsById(username)) throw new UsernameNotFoundException(username);
+        User user = userRepository.findById(username).get();
+        return user.getAuthorities();
+    }
+
+    public void addAuthority(String username, String authority) {
+        if (!userRepository.existsById(username)) throw new UsernameNotFoundException(username);
+        User user = userRepository.findById(username).get();
+        user.addAuthority(new Authority(username, authority));
+        userRepository.save(user);
+    }
+
+    public void removeAuthority(String username, String authority) {
+        if (!userRepository.existsById(username)) throw new UsernameNotFoundException(username);
+        User user = userRepository.findById(username).get();
+        Authority appAuthorityToRemove = user.getAuthorities().stream().filter((a) -> a.getAuthority().equalsIgnoreCase(authority)).findAny().get();
+        user.removeAuthority(appAuthorityToRemove);
+        userRepository.save(user);
+    }
+
+}
+---
+Hierbij nog wat uitleg!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+-> We gaan nu een package maken die exception genoemd gaat worden.
+   Deze exception gebruikt om een bericht weer te geven als de user
+   een actie doet op de applicatie en een foutmelding moet worden weergegeven.
+-> We gaan 3 verschillende Exceptions in de exception package maken en beginnen met
+
+   BadRequestException Class, deze vullen we met:
+   ---
+   package nl.novi.demo_security.exception;
+
+    public class BadRequestException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
+    public BadRequestException(String message) {
+        super(message);
+    }
+
+    public BadRequestException() {
+        super("Bad request.");
+	}
+    }
+    ---
+Daarna RecordNotFoundException Class, deze vulle we met:
+   ---
+   package nl.novi.demo_security.exception;
+
+    public class RecordNotFoundException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
+    public RecordNotFoundException(String message) {
+        super(message);
+    }
+
+    public RecordNotFoundException() {
+        super("Record not found.");
+        }
+    }
+    ---
+Als laatste de UserNotFoundException Class die we vullen met:
+    ---
+    package nl.novi.demo_security.exception;
+
+    public class UserNotFoundException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
+    public UserNotFoundException(String username) {
+        super("Cannot find user " + username);
+    }
+
+    public UserNotFoundException() {
+        super("User not found.");
+        }
+
+    }
+    ---
+Deze EXceptions vangen dus fouten op en geven vervolgens een boodschap mee
+die je in de super van elk van deze Classes meegeeft.
+
+-> Nu moet je ook een ExceptionController Class in de controller package aanmaken.
+-> Deze ExceptionController vul je hiermee:
+---
+package nl.novi.demo_security.controller;
+
+import nl.novi.demo_security.exception.BadRequestException;
+import nl.novi.demo_security.exception.RecordNotFoundException;
+import nl.novi.demo_security.exception.UserNotFoundException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@ControllerAdvice
+public class ExceptionController {
+
+    @ExceptionHandler(value = RecordNotFoundException.class)
+    public ResponseEntity<Object> exception(RecordNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(exception.getMessage());
+    }
+
+    @ExceptionHandler(value = BadRequestException.class)
+    public ResponseEntity<Object> exception(BadRequestException exception) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(exception.getMessage());
+    }
+
+    @ExceptionHandler(value = UserNotFoundException.class)
+    public ResponseEntity<Object> exception(UserNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(exception.getMessage());
+    }
+
+}
+---
+Als de USER dus ergens wil komen wat niet MAG of iets opvraagd wat er NIET IS, dan stuurt
+deze CONTROLLER, die haalt wat teruggegeven moet worden uit de EXCEPTION.
+
+
+
+
+
 
 
 

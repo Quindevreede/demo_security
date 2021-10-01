@@ -1,4 +1,4 @@
-package ml.novi.demo_security;
+package nl.novi.demo_security;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
